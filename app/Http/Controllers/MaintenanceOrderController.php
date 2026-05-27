@@ -7,184 +7,222 @@ use App\Models\MaintenanceOrder;
 use App\Models\Ownership;
 use App\Models\RepairPrice;
 use App\Models\Technician;
+use App\Models\User;
+use App\Notifications\ComplaintCompleted;
+use App\Notifications\ComplaintStatusChanged;
+use App\Notifications\CostEstimationApproved;
+use App\Notifications\TechnicianAssigned;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class MaintenanceOrderController extends Controller
 {
-    // FITUR ADMIN
+    const PRIORITIES = ['urgent' => 24, 'medium' => 72, 'low' => 168]; // SLA in hours
+
+    // ─── HELPER: Hitung SLA Deadline ───
+    private function calculateSlaDeadline(string $priority): Carbon
+    {
+        $hours = self::PRIORITIES[$priority] ?? 72;
+        return now()->addHours($hours);
+    }
+
+    // ─── HELPER: Kirim Notifikasi ───
+    private function notifyReporter(MaintenanceOrder $order, string $type, $oldStatus = null, $newStatus = null): void
+    {
+        $reporter = $order->reporter;
+        if (!$reporter || !$reporter->email) return;
+
+        try {
+            match ($type) {
+                'status_changed' => $reporter->notify(new ComplaintStatusChanged($order, $oldStatus, $newStatus)),
+                'assigned' => $reporter->notify(new TechnicianAssigned($order)),
+                'completed' => $reporter->notify(new ComplaintCompleted($order)),
+                'estimate_approved' => $reporter->notify(new CostEstimationApproved($order)),
+                default => null,
+            };
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Gagal kirim notifikasi: ' . $e->getMessage());
+        }
+    }
+
+    // ─── HELPER: Smart Assignment ───
+    private function findBestTechnician(MaintenanceOrder $order): ?Technician
+    {
+        $ownership = $order->ownership;
+        $specialtyMap = [
+            'Listrik' => ['Listrik'],
+            'Air/Pipa' => ['Air/Pipa'],
+            'Bangunan/Semen' => ['Bangunan/Semen', 'Keramik'],
+            'Atap' => ['Atap', 'Bangunan/Semen'],
+            'Kayu' => ['Kayu', 'Bangunan/Semen'],
+            'Keramik' => ['Keramik', 'Bangunan/Semen'],
+        ];
+
+        $title = strtolower($order->complaint_title . ' ' . $order->complaint_description);
+        $matchedSpecialties = [];
+        foreach ($specialtyMap as $keyword => $specialties) {
+            if (str_contains($title, strtolower($keyword))) {
+                $matchedSpecialties = array_merge($matchedSpecialties, $specialties);
+            }
+        }
+        if (empty($matchedSpecialties)) {
+            $matchedSpecialties = ['Lainnya'];
+        }
+
+        $candidates = Technician::whereIn('specialty', $matchedSpecialties)
+            ->where('status', 'Available')
+            ->withCount(['maintenanceOrders as workload' => function ($q) {
+                $q->whereIn('status', ['in_progress', 'pending', 'scheduled']);
+            }])
+            ->orderBy('workload', 'asc')
+            ->get();
+
+        if ($candidates->isEmpty()) {
+            $candidates = Technician::where('status', 'Available')
+                ->withCount(['maintenanceOrders as workload' => function ($q) {
+                    $q->whereIn('status', ['in_progress', 'pending', 'scheduled']);
+                }])
+                ->orderBy('workload', 'asc')
+                ->get();
+        }
+
+        return $candidates->first();
+    }
+
+    // ─── HELPER: Update SLA Status ───
+    private function updateSlaStatus(): void
+    {
+        $orders = MaintenanceOrder::whereIn('status', ['waiting_approval', 'pending', 'scheduled', 'in_progress', 'reopened'])
+            ->whereNotNull('sla_deadline')
+            ->get();
+
+        foreach ($orders as $order) {
+            $deadline = $order->sla_deadline;
+            $now = now();
+
+            if ($now->greaterThan($deadline)) {
+                if ($order->sla_status !== 'violated') {
+                    $order->sla_status = 'violated';
+                    $order->save();
+                }
+            } elseif ($now->diffInHours($deadline, false) <= 6 && $now->lessThan($deadline)) {
+                if ($order->sla_status !== 'warning') {
+                    $order->sla_status = 'warning';
+                    $order->save();
+                }
+            } else {
+                if ($order->sla_status !== 'on_track') {
+                    $order->sla_status = 'on_track';
+                    $order->save();
+                }
+            }
+        }
+    }
+
+    // ─── FITUR ADMIN ───
 
     public function indexAdmin()
     {
-        // Admin lihat semua keluhan (Urut yang terbaru & status pending duluan)
-        $orders = MaintenanceOrder::with(['ownership.unit', 'ownership.customer', 'technician'])
-            ->orderByRaw("FIELD(status, 'Pending', 'In_Progress', 'Done', 'Cancelled')")
+        $this->updateSlaStatus();
+
+        $query = MaintenanceOrder::with(['ownership.unit', 'ownership.customer', 'technician']);
+
+        if ($priority = request('priority')) {
+            $query->where('priority', $priority);
+        }
+
+        $orders = $query->orderByRaw("FIELD(status, 'waiting_approval', 'pending', 'scheduled', 'in_progress', 'on_hold', 'reopened', 'done', 'rejected', 'cancelled')")
             ->latest()
             ->paginate(10);
 
         return view('admin.maintenance.index', compact('orders'));
     }
 
-    // FITUR TEKNISI
-
-    /**
-     * Dashboard daftar keluhan untuk teknisi:
-     * - Keluhan baru (Pending)
-     * - Sedang diproses (In_Progress)
-     */
-    public function indexTechnician()
-    {
-        $user = Auth::user();
-
-        if ($user->role !== 'teknisi') {
-            abort(403, 'Akses khusus teknisi.');
-        }
-
-        // 1. Cari Profil Tukang berdasarkan Akun yang Login
-        $technician = \App\Models\Technician::where('user_id', $user->id)->first();
-
-        if (! $technician) {
-            // Jika Admin belum menghubungkan akun ini ke Master Tukang
-            return abort(403, 'Akun Anda belum dihubungkan dengan Profil Teknisi oleh Admin.');
-        }
-
-        // 2. Pending Orders: Tampilkan semua yang belum di-assign teknisi siapapun
-        $pendingOrders = MaintenanceOrder::with(['ownership.unit', 'ownership.customer', 'technician'])
-            ->where('status', 'Pending')
-            ->whereNull('technician_id') // Hanya yang nganggur
-            ->orderByDesc('complaint_date')
-            ->get();
-
-        // 3. In Progress: HANYA TAMPILKAN TUGAS MILIK TEKNISI INI SAJA
-        $inProgressOrders = MaintenanceOrder::with(['ownership.unit', 'ownership.customer', 'technician'])
-            ->where('status', 'In_Progress')
-            ->where('technician_id', $technician->id)
-            ->orderByDesc('complaint_date')
-            ->get();
-
-        // 4. Done: HANYA TAMPILKAN TUGAS YANG DISELESAIKAN TEKNISI INI
-        $doneOrders = MaintenanceOrder::with(['ownership.unit', 'ownership.customer', 'technician'])
-            ->where('status', 'Done')
-            ->where('technician_id', $technician->id)
-            ->orderByDesc('complaint_date')
-            ->limit(10)
-            ->get();
-
-        return view('technician.maintenance.index', compact(
-            'pendingOrders',
-            'inProgressOrders',
-            'doneOrders'
-        ));
-    }
-
-    /**
-     * Teknisi mengubah status laporan (menerima & menyelesaikan perbaikan).
-     * - Bisa ubah: Pending -> In_Progress
-     * - Bisa ubah: In_Progress -> Done
-     * Tidak mengubah biaya & pembayaran (tetap tugas admin).
-     */
-    public function technicianUpdateStatus(Request $request, $id)
-    {
-        $user = Auth::user();
-
-        if ($user->role !== 'teknisi') {
-            abort(403, 'Akses khusus teknisi.');
-        }
-
-        // Cari profil teknisi
-        $technician = \App\Models\Technician::where('user_id', $user->id)->first();
-
-        $request->validate([
-            'status' => 'required|in:Pending,In_Progress,Done',
-        ]);
-
-        $order = MaintenanceOrder::findOrFail($id);
-        $oldStatus = $order->status;
-        $newStatus = $request->status;
-
-        // Transisi 1: Teknisi "Mengklaim" tugas Pending menjadi In Progress
-        if ($oldStatus === 'Pending' && $newStatus === 'In_Progress') {
-            $order->status = 'In_Progress';
-            $order->technician_id = $technician->id; // Kunci tugas ini buat dia!
-            $technician->update(['status' => 'Busy']); // Status teknisi jadi sibuk
-        }
-        // Transisi 2: Teknisi menyelesaikan tugas
-        elseif ($oldStatus === 'In_Progress' && $newStatus === 'Done') {
-            // Pastikan ini benar-benar tugas dia
-            if ($order->technician_id !== $technician->id) {
-                return back()->with('error', 'Anda tidak berhak menyelesaikan tugas teknisi lain.');
-            }
-
-            $order->status = 'Done';
-            $order->completion_date = now();
-            $technician->update(['status' => 'Available']); // Teknisi kembali nganggur
-        } else {
-            return back()->with('error', 'Perubahan status tidak diizinkan.');
-        }
-
-        $order->save();
-
-        return back()->with('success', 'Status perbaikan berhasil diperbarui.');
-    }
-
     public function showAdmin($id)
     {
         $order = MaintenanceOrder::with(['ownership.unit', 'ownership.customer', 'technician', 'reporter'])->findOrFail($id);
         $technicians = Technician::where('status', 'Available')->get();
-
-        // Ambil list harga buat referensi admin
         $repairPrices = RepairPrice::all();
-
-        // Cek Status Garansi (Logic yang sama kayak di view)
         $isWarrantyExpired = Carbon::now()->greaterThan($order->ownership->warranty_end_date);
 
         return view('admin.maintenance.show', compact('order', 'technicians', 'repairPrices', 'isWarrantyExpired'));
     }
 
+    // ─── SMART ASSIGN ───
+    public function smartAssign($id)
+    {
+        $order = MaintenanceOrder::with('ownership')->findOrFail($id);
+
+        $bestTech = $this->findBestTechnician($order);
+        if (!$bestTech) {
+            return back()->with('error', 'Tidak ada teknisi yang tersedia saat ini.');
+        }
+
+        $order->technician_id = $bestTech->id;
+        $order->status = 'scheduled';
+        $order->save();
+
+        $bestTech->update(['status' => 'Busy']);
+
+        $this->notifyReporter($order, 'assigned');
+
+        return back()->with('success', 'Teknisi ' . $bestTech->name . ' berhasil ditugaskan secara otomatis!');
+    }
+
     public function updateStatus(Request $request, $id)
     {
         $order = MaintenanceOrder::findOrFail($id);
+        $oldStatus = $order->status;
 
-        // 1. SANITASI INPUT BIAYA (Ubah ke Integer murni)
-        // Ini memastikan input kosong jadi 0, dan input angka jadi integer
+        $request->validate(['status' => 'required']);
+
         $costInput = $request->input('cost');
         $cleanCost = (int) $costInput;
 
-        // 2. VALIDASI
-        $request->validate([
-            'status' => 'required',
-        ]);
-
-        // 3. UPDATE STATUS & DATA LAIN
         $order->status = $request->status;
 
-        // Logic Teknisi (Busy/Available)
-        if ($request->status == 'In_Progress' && $request->technician_id) {
+        if ($request->status == 'in_progress' && $request->technician_id) {
             $order->technician_id = $request->technician_id;
             Technician::where('id', $request->technician_id)->update(['status' => 'Busy']);
+            $this->notifyReporter($order, 'assigned');
         }
 
-        if ($request->status == 'Done') {
+        if ($request->status == 'scheduled' && $request->technician_id) {
+            $order->technician_id = $request->technician_id;
+            Technician::where('id', $request->technician_id)->update(['status' => 'Busy']);
+            $this->notifyReporter($order, 'assigned');
+        }
+
+        if ($request->status == 'done') {
             $order->completion_date = now();
             if ($order->technician_id) {
                 Technician::where('id', $order->technician_id)->update(['status' => 'Available']);
             }
+            $this->notifyReporter($order, 'completed');
+        }
+
+        if ($request->status == 'rejected') {
+            $order->rejection_reason = $request->rejection_reason;
+        }
+
+        $order->scheduled_date = $request->scheduled_date ?? $order->scheduled_date;
+        $order->admin_notes = $request->admin_notes ?? $order->admin_notes;
+
+        if ($request->has('priority') && in_array($request->priority, ['urgent', 'medium', 'low'])) {
+            $order->priority = $request->priority;
+            $order->sla_deadline = $this->calculateSlaDeadline($request->priority);
         }
 
         if ($cleanCost > 0) {
             $order->cost = $cleanCost;
-
-            // Set Unpaid hanya jika belum lunas
             if ($order->payment_status != 'Paid') {
                 $order->payment_status = 'Unpaid';
             }
         } else {
-            // Jika admin input 0 atau kosong
             $order->cost = 0;
-
-            // Kembalikan ke Free jika belum lunas
             if ($order->payment_status != 'Paid') {
                 $order->payment_status = 'Free';
             }
@@ -192,14 +230,173 @@ class MaintenanceOrderController extends Controller
 
         $order->save();
 
+        if ($oldStatus != $order->status) {
+            $this->notifyReporter($order, 'status_changed', $oldStatus, $order->status);
+        }
+
         return redirect()->route('admin.maintenance.index')
-            ->with('success', 'Status & Biaya berhasil diperbarui.');
+            ->with('success', 'Status & data berhasil diperbarui.');
     }
-    // FITUR WARGA / USER
+
+    // ─── APPROVE / REJECT ESTIMASI ───
+    public function approveEstimate($id)
+    {
+        $order = MaintenanceOrder::findOrFail($id);
+
+        if ($order->cost_status !== 'pending') {
+            return back()->with('error', 'Tidak ada estimasi yang menunggu persetujuan.');
+        }
+
+        $order->cost_status = 'approved';
+        $order->cost = (int) $order->estimated_cost;
+        $order->cost_approved_by = Auth::id();
+        $order->cost_approved_at = now();
+        $order->payment_status = 'Unpaid';
+        $order->save();
+
+        $this->notifyReporter($order, 'estimate_approved');
+
+        return back()->with('success', 'Estimasi biaya disetujui. Pelanggan akan mendapat notifikasi.');
+    }
+
+    public function rejectEstimate(Request $request, $id)
+    {
+        $order = MaintenanceOrder::findOrFail($id);
+
+        if ($order->cost_status !== 'pending') {
+            return back()->with('error', 'Tidak ada estimasi yang menunggu persetujuan.');
+        }
+
+        $order->cost_status = 'rejected';
+        $order->admin_notes = $request->input('rejection_note', $order->admin_notes);
+        $order->save();
+
+        return back()->with('success', 'Estimasi biaya ditolak. Teknisi akan diberi tahu.');
+    }
+
+    // ─── FITUR TEKNISI ───
+
+    public function indexTechnician()
+    {
+        $user = Auth::user();
+        if ($user->role !== 'teknisi') abort(403, 'Akses khusus teknisi.');
+
+        $technician = Technician::where('user_id', $user->id)->first();
+
+        if (!$technician) {
+            return abort(403, 'Akun Anda belum dihubungkan dengan Profil Teknisi oleh Admin.');
+        }
+
+        $pendingOrders = MaintenanceOrder::with(['ownership.unit', 'ownership.customer', 'technician'])
+            ->where('status', 'pending')
+            ->whereNull('technician_id')
+            ->orderByDesc('complaint_date')
+            ->get();
+
+        $inProgressOrders = MaintenanceOrder::with(['ownership.unit', 'ownership.customer', 'technician'])
+            ->where('status', 'in_progress')
+            ->where('technician_id', $technician->id)
+            ->orderByDesc('complaint_date')
+            ->get();
+
+        $scheduledOrders = MaintenanceOrder::with(['ownership.unit', 'ownership.customer', 'technician'])
+            ->where('status', 'scheduled')
+            ->where('technician_id', $technician->id)
+            ->orderByDesc('complaint_date')
+            ->get();
+
+        $doneOrders = MaintenanceOrder::with(['ownership.unit', 'ownership.customer', 'technician'])
+            ->where('status', 'done')
+            ->where('technician_id', $technician->id)
+            ->orderByDesc('complaint_date')
+            ->limit(10)
+            ->get();
+
+        return view('technician.maintenance.index', compact(
+            'pendingOrders', 'inProgressOrders', 'scheduledOrders', 'doneOrders'
+        ));
+    }
+
+    public function technicianUpdateStatus(Request $request, $id)
+    {
+        $user = Auth::user();
+        if ($user->role !== 'teknisi') abort(403);
+
+        $technician = Technician::where('user_id', $user->id)->first();
+
+        $request->validate([
+            'status' => 'required|in:pending,in_progress,done,scheduled',
+        ]);
+
+        $order = MaintenanceOrder::findOrFail($id);
+        $oldStatus = $order->status;
+        $newStatus = $request->status;
+
+        // Pending -> In_Progress (claim)
+        if ($oldStatus === 'pending' && $newStatus === 'in_progress') {
+            $order->status = 'in_progress';
+            $order->technician_id = $technician->id;
+            $technician->update(['status' => 'Busy']);
+            $this->notifyReporter($order, 'assigned');
+        }
+        // Scheduled -> In_Progress (start)
+        elseif ($oldStatus === 'scheduled' && $newStatus === 'in_progress') {
+            if ($order->technician_id !== $technician->id) {
+                return back()->with('error', 'Anda tidak berhak mengerjakan tugas teknisi lain.');
+            }
+            $order->status = 'in_progress';
+            $technician->update(['status' => 'Busy']);
+        }
+        // In_Progress -> Done
+        elseif ($oldStatus === 'in_progress' && $newStatus === 'done') {
+            if ($order->technician_id !== $technician->id) {
+                return back()->with('error', 'Anda tidak berhak menyelesaikan tugas teknisi lain.');
+            }
+            $order->status = 'done';
+            $order->completion_date = now();
+            $technician->update(['status' => 'Available']);
+            $this->notifyReporter($order, 'completed');
+        } else {
+            return back()->with('error', 'Perubahan status tidak diizinkan.');
+        }
+
+        $order->save();
+
+        $this->notifyReporter($order, 'status_changed', $oldStatus, $order->status);
+
+        return back()->with('success', 'Status perbaikan berhasil diperbarui.');
+    }
+
+    // ─── TEKNISI: INPUT ESTIMASI BIAYA ───
+    public function technicianInputEstimate(Request $request, $id)
+    {
+        $user = Auth::user();
+        if ($user->role !== 'teknisi') abort(403);
+
+        $technician = Technician::where('user_id', $user->id)->first();
+        $order = MaintenanceOrder::findOrFail($id);
+
+        if ($order->technician_id !== $technician->id) {
+            return back()->with('error', 'Ini bukan tugas Anda.');
+        }
+
+        $request->validate([
+            'estimated_cost' => 'required|numeric|min:0',
+            'estimated_description' => 'nullable|string',
+        ]);
+
+        $order->estimated_cost = $request->estimated_cost;
+        $order->estimated_description = $request->estimated_description;
+        $order->cost_status = 'pending';
+        $order->save();
+
+        return back()->with('success', 'Estimasi biaya telah dikirim ke Admin untuk disetujui.');
+    }
+
+    // ─── FITUR WARGA ───
 
     public function indexUser()
     {
-        // User cuma lihat keluhan dia sendiri
         $orders = MaintenanceOrder::with(['ownership.unit', 'technician'])
             ->where('reporter_id', Auth::id())
             ->latest()
@@ -211,9 +408,8 @@ class MaintenanceOrderController extends Controller
     public function create()
     {
         $user = Auth::user();
-        $myHomes = collect([]); // Default kosong
+        $myHomes = collect([]);
 
-        // SKENARIO 1: ROLE NASABAH (Cek via tabel Customers & Ownerships)
         if ($user->role === 'nasabah') {
             $customer = Customer::where('user_id', $user->id)->first();
             if ($customer) {
@@ -222,20 +418,14 @@ class MaintenanceOrderController extends Controller
                     ->with('unit')
                     ->get();
             }
-        }
-
-        // SKENARIO 2: ROLE WARGA (Cek via kolom ownership_id di tabel Users)
-        elseif ($user->role === 'warga') {
+        } elseif ($user->role === 'warga') {
             if ($user->ownership_id) {
-                // Ambil data ownership berdasarkan ID yang ditempel di user
                 $myHomes = Ownership::where('id', $user->ownership_id)
                     ->where('status', 'Active')
                     ->with('unit')
                     ->get();
             }
         }
-
-        // Jika Admin iseng buka, biarkan kosong atau tampilkan semua (opsional)
 
         return view('complaints.create', compact('myHomes'));
     }
@@ -246,7 +436,8 @@ class MaintenanceOrderController extends Controller
             'ownership_id' => 'required|exists:ownerships,id',
             'complaint_title' => 'required|string|max:255',
             'complaint_description' => 'required|string',
-            'complaint_photo' => 'nullable|image|max:2048', // Max 2MB
+            'complaint_photo' => 'nullable|image|max:2048',
+            'priority' => 'required|in:urgent,medium,low',
         ]);
 
         $photoPath = null;
@@ -254,36 +445,52 @@ class MaintenanceOrderController extends Controller
             $photoPath = $request->file('complaint_photo')->store('complaints', 'public');
         }
 
-        MaintenanceOrder::create([
+        $priority = $request->priority;
+        $slaDeadline = $this->calculateSlaDeadline($priority);
+
+        $order = MaintenanceOrder::create([
             'ownership_id' => $request->ownership_id,
             'reporter_id' => Auth::id(),
             'complaint_title' => $request->complaint_title,
             'complaint_description' => $request->complaint_description,
             'complaint_photo' => $photoPath,
             'complaint_date' => now(),
-            'status' => 'Pending',
+            'priority' => $priority,
+            'status' => 'waiting_approval',
+            'sla_deadline' => $slaDeadline,
             'cost' => 0,
             'payment_status' => 'Free',
+            'cost_status' => 'none',
         ]);
 
         return redirect()->route('complaints.index')
-            ->with('success', 'Keluhan berhasil dikirim. Menunggu respon Admin.');
+            ->with('success', 'Keluhan berhasil dikirim. Menunggu persetujuan Admin.');
     }
 
-    // FITUR UPDATE PEMBAYARAN
+    // ─── KONFIRMASI BIAYA OLEH WARGA ───
+    public function confirmCost($id)
+    {
+        $order = MaintenanceOrder::where('reporter_id', Auth::id())->findOrFail($id);
+
+        if ($order->cost_status !== 'approved') {
+            return back()->with('error', 'Belum ada estimasi biaya yang disetujui.');
+        }
+
+        $order->payment_status = 'Unpaid';
+        $order->save();
+
+        return back()->with('success', 'Biaya telah dikonfirmasi. Silakan lakukan pembayaran ke Admin.');
+    }
+
     public function markAsPaid($id)
     {
         $order = MaintenanceOrder::findOrFail($id);
 
-        // Cek dulu apakah ada tagihan
         if ($order->cost <= 0) {
             return back()->with('error', 'Tidak ada tagihan untuk pesanan ini.');
         }
 
-        // Update jadi Lunas
-        $order->update([
-            'payment_status' => 'Paid',
-        ]);
+        $order->update(['payment_status' => 'Paid']);
 
         return back()->with('success', 'Tagihan berhasil ditandai LUNAS.');
     }
@@ -291,7 +498,6 @@ class MaintenanceOrderController extends Controller
     public function showUser($id)
     {
         $order = MaintenanceOrder::where('reporter_id', Auth::id())->with('technician')->findOrFail($id);
-
         return view('complaints.show', compact('order'));
     }
 
@@ -315,15 +521,11 @@ class MaintenanceOrderController extends Controller
     public function showTechnician($id)
     {
         $user = Auth::user();
+        if ($user->role !== 'teknisi') abort(403);
 
-        if ($user->role !== 'teknisi') {
-            abort(403, 'Akses khusus teknisi.');
-        }
-
-        $technician = \App\Models\Technician::where('user_id', $user->id)->first();
+        $technician = Technician::where('user_id', $user->id)->first();
         $order = MaintenanceOrder::with(['ownership.unit', 'ownership.customer', 'reporter'])->findOrFail($id);
 
-        // Keamanan: Cegah teknisi melihat detail tugas yang sudah diklaim teknisi lain
         if ($order->technician_id !== null && $order->technician_id !== $technician->id) {
             abort(403, 'Akses ditolak. Ini adalah pekerjaan milik teknisi lain.');
         }
@@ -331,16 +533,13 @@ class MaintenanceOrderController extends Controller
         return view('technician.maintenance.show', compact('order'));
     }
 
-    // CETAK TIKET (BONUS)
     public function printTicket($id)
     {
         $order = MaintenanceOrder::with(['ownership.unit', 'technician'])
-            ->where('reporter_id', Auth::id()) // Pastikan punya dia sendiri
+            ->where('reporter_id', Auth::id())
             ->findOrFail($id);
 
         $pdf = Pdf::loadView('complaints.ticket', compact('order'));
-
-        // Set ukuran kertas struk (opsional, kita pakai A4 setengah aja biar rapi)
         $pdf->setPaper('A5', 'landscape');
 
         return $pdf->stream('Tiket-Laporan-#'.$order->id.'.pdf');

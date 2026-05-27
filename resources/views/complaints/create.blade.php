@@ -15,6 +15,7 @@
                     </ul>
                 </div>
             @endif
+
             <div class="mb-4">
                 <label class="block text-sm font-medium text-gray-700">Lokasi Kerusakan (Unit Rumah)</label>
                 <select name="ownership_id"
@@ -27,7 +28,18 @@
                         </option>
                     @endforeach
                 </select>
-                <p class="text-xs text-gray-500 mt-1">*Pilih unit rumah tempat kerusakan terjadi.</p>
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700">Tingkat Prioritas</label>
+                <select name="priority"
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    required>
+                    <option value="low">Low - Ringan (target 7 hari)</option>
+                    <option value="medium" selected>Medium - Sedang (target 3 hari)</option>
+                    <option value="urgent">Urgent - Kritis (target 1x24 jam)</option>
+                </select>
+                <p class="text-xs text-gray-500 mt-1">*Pilih tingkat prioritas sesuai tingkat kerusakan.</p>
             </div>
 
             <div class="mb-4">

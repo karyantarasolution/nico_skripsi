@@ -1,0 +1,28 @@
+{
+    "name": "laraveldaily/larastarters",
+    "description": "Laravel Starter Kits with extra functions",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Povilas Korop",
+            "email": "povilas@laraveldaily.com"
+        }
+    ],
+    "require": {
+        "php": "^8.2.0",
+        "illuminate/filesystem": "^11.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "LaravelDaily\\Larastarters\\": "src"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "LaravelDaily\\Larastarters\\LarastartersServiceProvider"
+            ]
+        }
+    },
+    "version": "3.0.0"
+}

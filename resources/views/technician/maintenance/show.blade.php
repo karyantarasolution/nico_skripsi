@@ -24,15 +24,21 @@
                     <span class="px-2 py-1 text-xs font-semibold text-green-800 bg-green-200 rounded-full">Low</span>
                 @endif
                 <p class="text-sm text-gray-500 mt-2">Status:</p>
-                @if ($order->status == 'in_progress')
-                    <span class="px-2 py-1 text-xs font-semibold text-yellow-800 bg-yellow-100 rounded-full">Sedang Diproses</span>
-                @elseif ($order->status == 'pending')
-                    <span class="px-2 py-1 text-xs font-semibold text-red-800 bg-red-100 rounded-full">Belum Diambil</span>
-                @elseif ($order->status == 'scheduled')
-                    <span class="px-2 py-1 text-xs font-semibold text-blue-800 bg-blue-100 rounded-full">Terjadwal</span>
-                @else
-                    <span class="px-2 py-1 text-xs font-semibold text-green-800 bg-green-100 rounded-full">Selesai</span>
-                @endif
+                @php
+                    $statusLabels = [
+                        'waiting_approval' => ['label' => 'Menunggu', 'class' => 'text-gray-800 bg-gray-200'],
+                        'pending' => ['label' => 'Pending', 'class' => 'text-red-800 bg-red-100'],
+                        'scheduled' => ['label' => 'Terjadwal', 'class' => 'text-blue-800 bg-blue-100'],
+                        'in_progress' => ['label' => 'Sedang Diproses', 'class' => 'text-yellow-800 bg-yellow-100'],
+                        'on_hold' => ['label' => 'Ditunda', 'class' => 'text-orange-800 bg-orange-100'],
+                        'rejected' => ['label' => 'Ditolak', 'class' => 'text-red-800 bg-red-200'],
+                        'reopened' => ['label' => 'Dibuka Kembali', 'class' => 'text-purple-800 bg-purple-100'],
+                        'done' => ['label' => 'Selesai', 'class' => 'text-green-800 bg-green-100'],
+                        'cancelled' => ['label' => 'Dibatalkan', 'class' => 'text-gray-600 bg-gray-200'],
+                    ];
+                    $s = $statusLabels[$order->status] ?? ['label' => $order->status, 'class' => 'text-gray-800 bg-gray-200'];
+                @endphp
+                <span class="px-2 py-1 text-xs font-semibold rounded-full {{ $s['class'] }}">{{ $s['label'] }}</span>
             </div>
         </div>
 
@@ -51,6 +57,51 @@
                 </a>
             </div>
         @endif
+
+        {{-- FORM UPDATE STATUS TEKNISI --}}
+        <div class="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+            <h4 class="font-bold text-gray-700 mb-3"><i class="fas fa-edit mr-1"></i> Update Status Pekerjaan</h4>
+            <form action="{{ route('technician.maintenance.update', $order->id) }}" method="POST">
+                @csrf @method('PUT')
+
+                <div class="mb-3">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                    <select name="status" id="status" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        <option value="pending" {{ $order->status == 'pending' ? 'selected' : '' }}>Pending</option>
+                        <option value="scheduled" {{ $order->status == 'scheduled' ? 'selected' : '' }}>Terjadwal</option>
+                        <option value="in_progress" {{ $order->status == 'in_progress' ? 'selected' : '' }}>Sedang Diproses</option>
+                        <option value="on_hold" {{ $order->status == 'on_hold' ? 'selected' : '' }}>Ditunda (On Hold)</option>
+                        <option value="reopened" {{ $order->status == 'reopened' ? 'selected' : '' }}>Dibuka Kembali</option>
+                        <option value="done" {{ $order->status == 'done' ? 'selected' : '' }}>Selesai (Done)</option>
+                        <option value="rejected" {{ $order->status == 'rejected' ? 'selected' : '' }}>Tolak (Rejected)</option>
+                        <option value="cancelled" {{ $order->status == 'cancelled' ? 'selected' : '' }}>Batalkan (Cancelled)</option>
+                    </select>
+                </div>
+
+                <div class="mb-3" id="scheduled-date-wrapper" style="display:none;">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Tanggal Terjadwal</label>
+                    <input type="date" name="scheduled_date" value="{{ optional($order->scheduled_date)->format('Y-m-d') }}"
+                        class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                </div>
+
+                <div class="mb-3" id="rejection-reason-wrapper" style="display:none;">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Alasan (jika ditolak/dibatalkan)</label>
+                    <textarea name="rejection_reason" rows="2" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        placeholder="Alasan penolakan/pembatalan...">{{ $order->rejection_reason }}</textarea>
+                </div>
+
+                <div class="mb-3">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Catatan</label>
+                    <textarea name="admin_notes" rows="2" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        placeholder="Catatan pekerjaan...">{{ $order->admin_notes }}</textarea>
+                </div>
+
+                <button type="submit" class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 font-bold shadow"
+                    onclick="return confirm('Update status pekerjaan ini?')">
+                    <i class="fas fa-save mr-1"></i> Update Status
+                </button>
+            </form>
+        </div>
 
         {{-- FORM INPUT ESTIMASI BIAYA (hanya saat in_progress) --}}
         @if ($order->status === 'in_progress' && in_array($order->cost_status, ['none', 'rejected']))
@@ -100,25 +151,21 @@
             <a href="{{ route('technician.maintenance.index') }}" class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 transition">
                 <i class="fas fa-arrow-left mr-1"></i> Kembali
             </a>
-
-            @if (in_array($order->status, ['in_progress', 'scheduled']))
-                <form action="{{ route('technician.maintenance.update', $order->id) }}" method="POST">
-                    @csrf @method('PUT')
-                    @if ($order->status === 'scheduled')
-                        <input type="hidden" name="status" value="in_progress">
-                        <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded font-bold hover:bg-blue-700 transition"
-                            onclick="return confirm('Mulai mengerjakan tugas ini?')">
-                            <i class="fas fa-play mr-1"></i> Mulai Kerja
-                        </button>
-                    @else
-                        <input type="hidden" name="status" value="done">
-                        <button type="submit" class="bg-green-600 text-white px-6 py-2 rounded font-bold hover:bg-green-700 transition"
-                            onclick="return confirm('Apakah Anda yakin tugas ini sudah selesai dikerjakan?')">
-                            <i class="fas fa-check mr-1"></i> Tandai Selesai
-                        </button>
-                    @endif
-                </form>
-            @endif
         </div>
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const statusSelect = document.getElementById('status');
+                const scheduledWrapper = document.getElementById('scheduled-date-wrapper');
+                const rejectionWrapper = document.getElementById('rejection-reason-wrapper');
+
+                function toggleFields() {
+                    scheduledWrapper.style.display = statusSelect.value === 'scheduled' ? 'block' : 'none';
+                    rejectionWrapper.style.display = (statusSelect.value === 'rejected' || statusSelect.value === 'cancelled') ? 'block' : 'none';
+                }
+
+                statusSelect.addEventListener('change', toggleFields);
+                toggleFields();
+            });
+        </script>
     </div>
 </x-app-layout>

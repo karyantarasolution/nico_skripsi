@@ -46,7 +46,11 @@
                                         @endif
                                     </td>
                                     <td class="px-4 py-3 text-sm">{{ $order->ownership->customer->name }}</td>
-                                    <td class="px-4 py-3 text-sm">
+                                    <td class="px-4 py-3 text-sm space-x-2">
+                                        <a href="{{ route('technician.maintenance.show', $order->id) }}"
+                                            class="px-3 py-1 border border-gray-300 rounded text-xs text-gray-700 hover:bg-gray-50">
+                                            Detail
+                                        </a>
                                         <form action="{{ route('technician.maintenance.update', $order->id) }}" method="POST" class="inline">
                                             @csrf @method('PUT')
                                             <input type="hidden" name="status" value="in_progress">
@@ -100,7 +104,11 @@
                                     <td class="px-4 py-3 text-sm">
                                         {{ $order->scheduled_date ? $order->scheduled_date->format('d/m/Y') : '-' }}
                                     </td>
-                                    <td class="px-4 py-3 text-sm">
+                                    <td class="px-4 py-3 text-sm space-x-2">
+                                        <a href="{{ route('technician.maintenance.show', $order->id) }}"
+                                            class="px-3 py-1 border border-gray-300 rounded text-xs text-gray-700 hover:bg-gray-50">
+                                            Detail
+                                        </a>
                                         <form action="{{ route('technician.maintenance.update', $order->id) }}" method="POST" class="inline">
                                             @csrf @method('PUT')
                                             <input type="hidden" name="status" value="in_progress">
@@ -170,10 +178,17 @@
                                         </a>
                                         <form action="{{ route('technician.maintenance.update', $order->id) }}" method="POST" class="inline">
                                             @csrf @method('PUT')
+                                            <input type="hidden" name="status" value="on_hold">
+                                            <button type="submit" class="px-3 py-1 bg-yellow-500 text-white text-xs rounded hover:bg-yellow-600">
+                                                Tunda
+                                            </button>
+                                        </form>
+                                        <form action="{{ route('technician.maintenance.update', $order->id) }}" method="POST" class="inline">
+                                            @csrf @method('PUT')
                                             <input type="hidden" name="status" value="done">
                                             <button type="submit" class="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
                                                 onclick="return confirm('Selesaikan tugas ini?')">
-                                                Tandai Selesai
+                                                Selesai
                                             </button>
                                         </form>
                                     </td>
@@ -181,6 +196,61 @@
                             @empty
                                 <tr>
                                     <td colspan="4" class="px-4 py-3 text-center text-sm text-gray-500">Tidak ada pekerjaan yang sedang diproses.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        {{-- DITUNDA (ON HOLD) --}}
+        <div class="bg-white rounded-lg shadow-xs p-4">
+            <h2 class="text-lg font-bold mb-4 text-gray-800 flex items-center">
+                <span class="w-2 h-2 rounded-full bg-yellow-500 mr-2"></span>
+                Ditunda (On Hold)
+            </h2>
+
+            <div class="w-full overflow-hidden rounded-lg shadow-xs">
+                <div class="w-full overflow-x-auto">
+                    <table class="w-full whitespace-no-wrap">
+                        <thead>
+                            <tr class="text-xs font-semibold tracking-wide text-left text-gray-500 uppercase border-b bg-gray-50">
+                                <th class="px-4 py-3">Tanggal & Unit</th>
+                                <th class="px-4 py-3">Keluhan</th>
+                                <th class="px-4 py-3">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y">
+                            @forelse ($onHoldOrders ?? collect([]) as $order)
+                                <tr class="text-gray-700">
+                                    <td class="px-4 py-3">
+                                        <div class="text-sm">
+                                            <p class="font-semibold">Blok {{ $order->ownership->unit->block }}-{{ $order->ownership->unit->number }}</p>
+                                            <p class="text-xs text-gray-600">{{ $order->complaint_date->format('d/m/Y') }}</p>
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-3 text-sm">
+                                        <span class="font-bold block">{{ Str::limit($order->complaint_title, 30) }}</span>
+                                        <span class="text-xs text-gray-500">{{ Str::limit($order->complaint_description, 60) }}</span>
+                                    </td>
+                                    <td class="px-4 py-3 text-sm space-x-2">
+                                        <a href="{{ route('technician.maintenance.show', $order->id) }}"
+                                            class="px-3 py-1 border border-gray-300 rounded text-xs text-gray-700 hover:bg-gray-50">
+                                            Detail
+                                        </a>
+                                        <form action="{{ route('technician.maintenance.update', $order->id) }}" method="POST" class="inline">
+                                            @csrf @method('PUT')
+                                            <input type="hidden" name="status" value="in_progress">
+                                            <button type="submit" class="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700">
+                                                Lanjutkan
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="3" class="px-4 py-3 text-center text-sm text-gray-500">Tidak ada pekerjaan yang ditunda.</td>
                                 </tr>
                             @endforelse
                         </tbody>

@@ -319,6 +319,12 @@ class MaintenanceOrderController extends Controller
             ->orderByDesc('complaint_date')
             ->get();
 
+        $onHoldOrders = MaintenanceOrder::with(['ownership.unit', 'ownership.customer', 'technician'])
+            ->where('status', 'on_hold')
+            ->where('technician_id', $technician->id)
+            ->orderByDesc('complaint_date')
+            ->get();
+
         $doneOrders = MaintenanceOrder::with(['ownership.unit', 'ownership.customer', 'technician'])
             ->where('status', 'done')
             ->where('technician_id', $technician->id)
@@ -327,7 +333,7 @@ class MaintenanceOrderController extends Controller
             ->get();
 
         return view('technician.maintenance.index', compact(
-            'pendingOrders', 'inProgressOrders', 'scheduledOrders', 'doneOrders'
+            'pendingOrders', 'inProgressOrders', 'scheduledOrders', 'onHoldOrders', 'doneOrders'
         ));
     }
 
@@ -339,42 +345,65 @@ class MaintenanceOrderController extends Controller
         $technician = Technician::where('user_id', $user->id)->first();
 
         $request->validate([
-            'status' => 'required|in:pending,in_progress,done,scheduled',
+            'status' => 'required|in:waiting_approval,pending,scheduled,in_progress,on_hold,rejected,reopened,done,cancelled',
+            'rejection_reason' => 'nullable|string',
+            'scheduled_date' => 'nullable|date',
+            'admin_notes' => 'nullable|string',
         ]);
 
         $order = MaintenanceOrder::findOrFail($id);
         $oldStatus = $order->status;
         $newStatus = $request->status;
 
-        // Pending -> In_Progress (claim)
+        // Claim pending order
         if ($oldStatus === 'pending' && $newStatus === 'in_progress') {
-            $order->status = 'in_progress';
+            if ($order->technician_id !== null) {
+                return back()->with('error', 'Pekerjaan ini sudah diambil teknisi lain.');
+            }
             $order->technician_id = $technician->id;
             $technician->update(['status' => 'Busy']);
             $this->notifyReporter($order, 'assigned');
         }
-        // Scheduled -> In_Progress (start)
+        // Start scheduled work
         elseif ($oldStatus === 'scheduled' && $newStatus === 'in_progress') {
             if ($order->technician_id !== $technician->id) {
                 return back()->with('error', 'Anda tidak berhak mengerjakan tugas teknisi lain.');
             }
-            $order->status = 'in_progress';
             $technician->update(['status' => 'Busy']);
-            $this->notifyReporter($order, 'status_changed', $oldStatus, $order->status);
+            $this->notifyReporter($order, 'status_changed', $oldStatus, $newStatus);
         }
-        // In_Progress -> Done
-        elseif ($oldStatus === 'in_progress' && $newStatus === 'done') {
+        // Complete work
+        elseif ($newStatus === 'done') {
             if ($order->technician_id !== $technician->id) {
                 return back()->with('error', 'Anda tidak berhak menyelesaikan tugas teknisi lain.');
             }
-            $order->status = 'done';
             $order->completion_date = now();
-            $technician->update(['status' => 'Available']);
+            if ($order->technician_id) {
+                Technician::where('id', $order->technician_id)->update(['status' => 'Available']);
+            }
             $this->notifyReporter($order, 'completed');
-        } else {
-            return back()->with('error', 'Perubahan status tidak diizinkan.');
+        }
+        // Handle other status transitions
+        else {
+            if ($order->technician_id !== null && $order->technician_id !== $technician->id) {
+                return back()->with('error', 'Anda tidak berhak mengubah status pekerjaan teknisi lain.');
+            }
+
+            if ($newStatus === 'cancelled' || $newStatus === 'rejected') {
+                if ($order->technician_id) {
+                    Technician::where('id', $order->technician_id)->update(['status' => 'Available']);
+                }
+            }
+
+            if ($oldStatus !== $newStatus) {
+                $this->notifyReporter($order, 'status_changed', $oldStatus, $newStatus);
+            }
         }
 
+        $order->status = $newStatus;
+        $order->scheduled_date = $request->scheduled_date ?? $order->scheduled_date;
+        $order->admin_notes = $request->admin_notes ?? $order->admin_notes;
+        $order->rejection_reason = $request->rejection_reason ?? $order->rejection_reason;
         $order->save();
 
         return back()->with('success', 'Status perbaikan berhasil diperbarui.');
@@ -469,7 +498,7 @@ class MaintenanceOrderController extends Controller
             'complaint_photo' => $photoPath,
             'complaint_date' => now(),
             'priority' => $priority,
-            'status' => 'waiting_approval',
+            'status' => 'pending',
             'sla_deadline' => $slaDeadline,
             'cost' => 0,
             'payment_status' => 'Free',
@@ -477,7 +506,7 @@ class MaintenanceOrderController extends Controller
         ]);
 
         return redirect()->route('complaints.index')
-            ->with('success', 'Keluhan berhasil dikirim. Menunggu persetujuan Admin.');
+            ->with('success', 'Keluhan berhasil dikirim. Teknisi akan segera memproses keluhan Anda.');
     }
 
     // ─── KONFIRMASI BIAYA OLEH WARGA ───

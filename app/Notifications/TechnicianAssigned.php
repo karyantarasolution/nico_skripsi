@@ -17,7 +17,11 @@ class TechnicianAssigned extends Notification
 
     public function via(object $notifiable): array
     {
-        return ['mail'];
+        $channels = ['mail', 'database'];
+        if ($notifiable->phone) {
+            $channels[] = WhatsAppChannel::class;
+        }
+        return $channels;
     }
 
     public function toMail(object $notifiable): MailMessage
@@ -34,5 +38,35 @@ class TechnicianAssigned extends Notification
             ->line('No. Telepon: ' . ($tech->phone ?? '-'))
             ->action('Lihat Detail', url('/complaints/' . $this->order->id))
             ->line('Teknisi akan segera menghubungi Anda.');
+    }
+
+    public function toWhatsApp(object $notifiable): string
+    {
+        $tech = $this->order->technician;
+        $techName = $tech->name ?? '-';
+        $techPhone = $tech->phone ?? '-';
+
+        return "*Teknisi Ditugaskan!*\n\n"
+            . "Halo {$notifiable->name},\n\n"
+            . "Seorang teknisi telah ditugaskan untuk laporan Anda:\n"
+            . "Judul: {$this->order->complaint_title}\n"
+            . "Teknisi: {$techName}\n"
+            . "No. WA: {$techPhone}\n\n"
+            . "Lihat detail: " . url('/complaints/' . $this->order->id) . "\n\n"
+            . "Teknisi akan segera menghubungi Anda.";
+    }
+
+    public function toDatabase(object $notifiable): array
+    {
+        $tech = $this->order->technician;
+
+        return [
+            'title' => 'Teknisi Ditugaskan',
+            'message' => "Teknisi {$tech->name} ditugaskan untuk laporan #{$this->order->id}",
+            'order_id' => $this->order->id,
+            'url' => url('/complaints/' . $this->order->id),
+            'icon' => 'fas fa-user-cog',
+            'color' => 'blue',
+        ];
     }
 }

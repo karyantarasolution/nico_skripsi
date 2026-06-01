@@ -60,11 +60,40 @@
                         Status:
                         @if ($order->payment_status == 'Paid')
                             <span class="px-2 py-1 bg-green-100 text-green-700 rounded-full font-bold">LUNAS</span>
+                        @elseif ($order->payment_proof)
+                            <span class="px-2 py-1 bg-blue-100 text-blue-700 rounded-full font-bold">MENUNGGU VERIFIKASI</span>
                         @else
                             <span class="px-2 py-1 bg-red-100 text-red-700 rounded-full font-bold">BELUM DIBAYAR</span>
                         @endif
                     </div>
-                    <p class="text-xs text-gray-500 mt-2">*Silakan lakukan pembayaran ke Admin Developer.</p>
+
+                    {{-- Upload Bukti Pembayaran --}}
+                    @if ($order->payment_status == 'Unpaid' && !$order->payment_proof)
+                        <div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                            <p class="text-sm font-semibold text-blue-700 mb-2"><i class="fas fa-upload mr-1"></i> Upload Bukti Transfer</p>
+                            <form action="{{ route('complaints.upload-payment', $order->id) }}" method="POST" enctype="multipart/form-data">
+                                @csrf
+                                <input type="file" name="payment_proof" accept="image/*" required
+                                    class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 mb-2">
+                                <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 font-semibold">
+                                    <i class="fas fa-paper-plane mr-1"></i> Upload Bukti
+                                </button>
+                            </form>
+                        </div>
+                    @endif
+
+                    {{-- Tampilkan Bukti Pembayaran --}}
+                    @if ($order->payment_proof)
+                        <div class="mt-3">
+                            <p class="text-sm font-semibold text-gray-700 mb-1">Bukti Pembayaran:</p>
+                            <a href="{{ asset('storage/' . $order->payment_proof) }}" target="_blank">
+                                <img src="{{ asset('storage/' . $order->payment_proof) }}" class="h-32 rounded border hover:opacity-75">
+                            </a>
+                            @if ($order->payment_proof_uploaded_at)
+                                <p class="text-xs text-gray-500 mt-1">Diupload: {{ $order->payment_proof_uploaded_at->format('d/m/Y H:i') }}</p>
+                            @endif
+                        </div>
+                    @endif
                 </div>
             @endif
 

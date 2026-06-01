@@ -183,17 +183,20 @@ class MaintenanceOrderController extends Controller
         $cleanCost = (int) $costInput;
 
         $order->status = $request->status;
+        $notified = false;
 
         if ($request->status == 'in_progress' && $request->technician_id) {
             $order->technician_id = $request->technician_id;
             Technician::where('id', $request->technician_id)->update(['status' => 'Busy']);
             $this->notifyReporter($order, 'assigned');
+            $notified = true;
         }
 
         if ($request->status == 'scheduled' && $request->technician_id) {
             $order->technician_id = $request->technician_id;
             Technician::where('id', $request->technician_id)->update(['status' => 'Busy']);
             $this->notifyReporter($order, 'assigned');
+            $notified = true;
         }
 
         if ($request->status == 'done') {
@@ -202,10 +205,20 @@ class MaintenanceOrderController extends Controller
                 Technician::where('id', $order->technician_id)->update(['status' => 'Available']);
             }
             $this->notifyReporter($order, 'completed');
+            $notified = true;
         }
 
         if ($request->status == 'rejected') {
             $order->rejection_reason = $request->rejection_reason;
+            if ($order->technician_id) {
+                Technician::where('id', $order->technician_id)->update(['status' => 'Available']);
+            }
+        }
+
+        if ($request->status == 'cancelled') {
+            if ($order->technician_id) {
+                Technician::where('id', $order->technician_id)->update(['status' => 'Available']);
+            }
         }
 
         $order->scheduled_date = $request->scheduled_date ?? $order->scheduled_date;
@@ -230,7 +243,7 @@ class MaintenanceOrderController extends Controller
 
         $order->save();
 
-        if ($oldStatus != $order->status) {
+        if (!$notified && $oldStatus != $order->status) {
             $this->notifyReporter($order, 'status_changed', $oldStatus, $order->status);
         }
 
@@ -284,7 +297,8 @@ class MaintenanceOrderController extends Controller
         $technician = Technician::where('user_id', $user->id)->first();
 
         if (!$technician) {
-            return abort(403, 'Akun Anda belum dihubungkan dengan Profil Teknisi oleh Admin.');
+            return redirect()->route('dashboard')
+                ->with('error', 'Akun Anda belum dihubungkan dengan Profil Teknisi oleh Admin.');
         }
 
         $pendingOrders = MaintenanceOrder::with(['ownership.unit', 'ownership.customer', 'technician'])
@@ -346,6 +360,7 @@ class MaintenanceOrderController extends Controller
             }
             $order->status = 'in_progress';
             $technician->update(['status' => 'Busy']);
+            $this->notifyReporter($order, 'status_changed', $oldStatus, $order->status);
         }
         // In_Progress -> Done
         elseif ($oldStatus === 'in_progress' && $newStatus === 'done') {
@@ -361,8 +376,6 @@ class MaintenanceOrderController extends Controller
         }
 
         $order->save();
-
-        $this->notifyReporter($order, 'status_changed', $oldStatus, $order->status);
 
         return back()->with('success', 'Status perbaikan berhasil diperbarui.');
     }
@@ -493,6 +506,46 @@ class MaintenanceOrderController extends Controller
         $order->update(['payment_status' => 'Paid']);
 
         return back()->with('success', 'Tagihan berhasil ditandai LUNAS.');
+    }
+
+    // ─── UPLOAD BUKTI PEMBAYARAN OLEH WARGA ───
+    public function uploadPaymentProof(Request $request, $id)
+    {
+        $order = MaintenanceOrder::where('reporter_id', Auth::id())->findOrFail($id);
+
+        if ($order->payment_status !== 'Unpaid') {
+            return back()->with('error', 'Tidak perlu upload bukti pembayaran.');
+        }
+
+        $request->validate([
+            'payment_proof' => 'required|image|max:5120',
+        ]);
+
+        $path = $request->file('payment_proof')->store('payment-proofs', 'public');
+
+        $order->update([
+            'payment_proof' => $path,
+            'payment_proof_uploaded_at' => now(),
+        ]);
+
+        return back()->with('success', 'Bukti pembayaran berhasil diupload. Admin akan memverifikasinya.');
+    }
+
+    // ─── VERIFIKASI PEMBAYARAN OLEH ADMIN ───
+    public function verifyPayment($id)
+    {
+        $order = MaintenanceOrder::findOrFail($id);
+
+        if (!$order->payment_proof) {
+            return back()->with('error', 'Belum ada bukti pembayaran yang diupload.');
+        }
+
+        $order->update([
+            'payment_status' => 'Paid',
+            'payment_proof_verified_at' => now(),
+        ]);
+
+        return back()->with('success', 'Pembayaran berhasil diverifikasi dan ditandai LUNAS.');
     }
 
     public function showUser($id)

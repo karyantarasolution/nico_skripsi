@@ -137,8 +137,8 @@
         </div>
         <div class="lg:absolute lg:inset-y-0 lg:right-0 lg:w-1/2">
             <img class="h-56 w-full object-cover sm:h-72 md:h-96 lg:w-full lg:h-full"
-                src="https://sikumbang.tapera.go.id/public/generated/images/fotoTampak-1628313042523-9686.jpeg"
-                {{-- https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-1.2.1&auto=format&fit=crop&w=1920&q=80 --}} alt="Rumah Nyaman">
+                src="https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-1.2.1&auto=format&fit=crop&w=1920&q=80"
+                alt="Rumah Nyaman">
         </div>
     </div>
 

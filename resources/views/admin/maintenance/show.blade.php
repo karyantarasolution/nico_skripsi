@@ -119,7 +119,7 @@
                 {{-- Tanggal Terjadwal --}}
                 <div class="mb-6" id="scheduled-date-wrapper" style="display:none;">
                     <label class="block text-sm font-medium text-gray-700 mb-2">Tanggal Terjadwal</label>
-                    <input type="date" name="scheduled_date" value="{{ $order->scheduled_date ? $order->scheduled_date->format('Y-m-d') : '' }}"
+                    <input type="date" name="scheduled_date" value="{{ optional($order->scheduled_date)->format('Y-m-d') }}"
                         class="w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500">
                 </div>
 
@@ -134,11 +134,13 @@
                                 </option>
                             @endforeach
                         </select>
-                        <a href="{{ route('admin.maintenance.smart-assign', $order->id) }}"
-                            class="px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 whitespace-nowrap"
-                            onclick="return confirm('Assign teknisi terbaik secara otomatis?')">
-                            <i class="fas fa-magic mr-1"></i> Smart Assign
-                        </a>
+                        <form action="{{ route('admin.maintenance.smart-assign', $order->id) }}" method="POST" class="inline">
+                            @csrf
+                            <button type="submit" class="px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 whitespace-nowrap"
+                                onclick="return confirm('Assign teknisi terbaik secara otomatis?')">
+                                <i class="fas fa-magic mr-1"></i> Smart Assign
+                            </button>
+                        </form>
                     </div>
                     @if ($order->technician)
                         <p class="text-xs text-blue-600 mt-1">Saat ini: {{ $order->technician->name }}</p>
@@ -242,13 +244,45 @@
             @endif
 
             {{-- STATUS PEMBAYARAN --}}
-            @if ($order->cost > 0 && $order->payment_status == 'Unpaid')
+            @if ($order->cost > 0 && $order->payment_status == 'Unpaid' && $order->payment_proof)
+                <div class="mt-6 border-t pt-6">
+                    <h4 class="font-bold text-gray-700 mb-2">Status Pembayaran</h4>
+                    <div class="bg-blue-50 border border-blue-200 p-4 rounded-lg">
+                        <p class="text-blue-800 font-bold mb-2"><i class="fas fa-clock mr-1"></i> MENUNGGU VERIFIKASI</p>
+                        <p class="text-sm text-gray-600">Total: Rp {{ number_format($order->cost, 0, ',', '.') }}</p>
+
+                        {{-- Tampilkan Bukti Pembayaran --}}
+                        <div class="mt-3">
+                            <p class="text-sm font-semibold text-gray-700 mb-1">Bukti Pembayaran:</p>
+                            <a href="{{ asset('storage/' . $order->payment_proof) }}" target="_blank">
+                                <img src="{{ asset('storage/' . $order->payment_proof) }}" class="h-40 rounded border hover:opacity-75">
+                            </a>
+                            @if ($order->payment_proof_uploaded_at)
+                                <p class="text-xs text-gray-500 mt-1">Diupload: {{ $order->payment_proof_uploaded_at->format('d/m/Y H:i') }}</p>
+                            @endif
+                        </div>
+
+                        <div class="flex gap-2 mt-4">
+                            <form action="{{ route('admin.maintenance.verify-payment', $order->id) }}" method="POST">
+                                @csrf
+                                <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded shadow hover:bg-green-700 font-bold text-sm"
+                                    onclick="return confirm('Verifikasi pembayaran ini? Status akan berubah menjadi LUNAS.')">
+                                    <i class="fas fa-check mr-1"></i> Verifikasi & Lunas
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            @elseif ($order->cost > 0 && $order->payment_status == 'Unpaid')
                 <div class="mt-6 border-t pt-6">
                     <h4 class="font-bold text-gray-700 mb-2">Status Pembayaran</h4>
                     <div class="bg-orange-50 border border-orange-200 p-4 rounded-lg flex justify-between items-center">
                         <div>
                             <p class="text-orange-800 font-bold">BELUM DIBAYAR (Unpaid)</p>
                             <p class="text-sm text-gray-600">Total: Rp {{ number_format($order->cost, 0, ',', '.') }}</p>
+                            @if ($order->payment_proof_uploaded_at)
+                                <p class="text-xs text-gray-500 mt-1">Bukti diupload: {{ $order->payment_proof_uploaded_at->format('d/m/Y H:i') }}</p>
+                            @endif
                         </div>
                         <form id="form-mark-paid" action="{{ route('admin.maintenance.paid', $order->id) }}" method="POST">
                             @csrf @method('PUT')
@@ -269,6 +303,13 @@
                         <div>
                             <p class="text-green-800 font-bold">LUNAS (Paid)</p>
                             <p class="text-sm text-gray-600">Terima kasih, pembayaran telah diverifikasi.</p>
+                            @if ($order->payment_proof)
+                                <div class="mt-2">
+                                    <a href="{{ asset('storage/' . $order->payment_proof) }}" target="_blank" class="text-xs text-blue-600 hover:underline">
+                                        <i class="fas fa-image mr-1"></i> Lihat Bukti Pembayaran
+                                    </a>
+                                </div>
+                            @endif
                         </div>
                     </div>
                 </div>

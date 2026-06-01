@@ -22,6 +22,13 @@
             {{ __('Dashboard') }}
         </x-nav-link>
 
+        <x-nav-link href="{{ route('notifications.index') }}" :active="request()->routeIs('notifications.*')">
+            <x-slot name="icon">
+                <i class="fas fa-bell w-6 h-6 flex items-center justify-center text-lg"></i>
+            </x-slot>
+            {{ __('Notifikasi') }}
+        </x-nav-link>
+
         @if (Auth::user()->role === 'admin')
             <div class="mt-4 mb-2 px-6 text-xs text-gray-400 uppercase tracking-wider">
                 Master Data

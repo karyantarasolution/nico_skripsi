@@ -16,6 +16,15 @@ Route::get('/', function () {
     return view('welcome');
 });
 
+// ─── NOTIFIKASI ───
+Route::middleware('auth')->group(function () {
+    Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'index'])->name('notifications.index');
+    Route::get('/notifications/{id}/read', [\App\Http\Controllers\NotificationController::class, 'markAsRead'])->name('notifications.read');
+    Route::post('/notifications/mark-all-read', [\App\Http\Controllers\NotificationController::class, 'markAllAsRead'])->name('notifications.markAllRead');
+    Route::get('/notifications/unread/count', [\App\Http\Controllers\NotificationController::class, 'unreadCount'])->name('notifications.unread');
+    Route::get('/notifications/fetch/latest', [\App\Http\Controllers\NotificationController::class, 'fetchLatest'])->name('notifications.fetch');
+});
+
 Route::get('/dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('dashboard');
@@ -42,6 +51,9 @@ Route::middleware('auth')->group(function () {
 
         Route::put('maintenance/{id}/mark-as-paid', [MaintenanceOrderController::class, 'markAsPaid'])
             ->name('maintenance.paid');
+
+        Route::post('maintenance/{id}/verify-payment', [MaintenanceOrderController::class, 'verifyPayment'])
+            ->name('maintenance.verify-payment');
 
         // APPROVE / REJECT ESTIMASI BIAYA
         Route::put('maintenance/{id}/approve-estimate', [MaintenanceOrderController::class, 'approveEstimate'])
@@ -93,9 +105,13 @@ Route::middleware('auth')->group(function () {
     Route::get('/complaints/{id}', [MaintenanceOrderController::class, 'showUser'])->name('complaints.show');
     Route::put('/complaints/{id}/rate', [MaintenanceOrderController::class, 'rateService'])->name('complaints.rate');
 
-    // WARGA: KONFIRMASI BIAYA
-    Route::put('/complaints/{id}/confirm-cost', [MaintenanceOrderController::class, 'confirmCost'])
-        ->name('complaints.confirm-cost');
+        // WARGA: KONFIRMASI BIAYA
+        Route::put('/complaints/{id}/confirm-cost', [MaintenanceOrderController::class, 'confirmCost'])
+            ->name('complaints.confirm-cost');
+
+        // WARGA: UPLOAD BUKTI PEMBAYARAN
+        Route::post('/complaints/{id}/upload-payment', [MaintenanceOrderController::class, 'uploadPaymentProof'])
+            ->name('complaints.upload-payment');
 
     Route::get('/complaints/{id}/print', [MaintenanceOrderController::class, 'printTicket'])->name('complaints.print');
 });

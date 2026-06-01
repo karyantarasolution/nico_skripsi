@@ -15,6 +15,8 @@ class MaintenanceOrder extends Model
         'sla_deadline' => 'datetime',
         'cost' => 'integer',
         'estimated_cost' => 'decimal:2',
+        'payment_proof_uploaded_at' => 'datetime',
+        'payment_proof_verified_at' => 'datetime',
     ];
 
     protected $fillable = [
@@ -34,6 +36,9 @@ class MaintenanceOrder extends Model
         'review',
         'cost',
         'payment_status',
+        'payment_proof',
+        'payment_proof_uploaded_at',
+        'payment_proof_verified_at',
         'estimated_cost',
         'estimated_description',
         'cost_status',

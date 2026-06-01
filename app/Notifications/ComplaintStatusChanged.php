@@ -17,7 +17,11 @@ class ComplaintStatusChanged extends Notification
 
     public function via(object $notifiable): array
     {
-        return ['mail'];
+        $channels = ['mail', 'database'];
+        if ($notifiable->phone) {
+            $channels[] = WhatsAppChannel::class;
+        }
+        return $channels;
     }
 
     public function toMail(object $notifiable): MailMessage
@@ -45,5 +49,53 @@ class ComplaintStatusChanged extends Notification
             ->line('Status: ' . $oldLabel . ' → ' . $newLabel)
             ->action('Lihat Detail', url('/complaints/' . $this->order->id))
             ->line('Terima kasih telah menggunakan layanan kami.');
+    }
+
+    public function toWhatsApp(object $notifiable): string
+    {
+        $statusLabels = [
+            'waiting_approval' => 'Menunggu Persetujuan',
+            'pending' => 'Pending',
+            'scheduled' => 'Terjadwal',
+            'in_progress' => 'Sedang Dikerjakan',
+            'on_hold' => 'Ditunda',
+            'done' => 'Selesai',
+            'rejected' => 'Ditolak',
+            'reopened' => 'Dibuka Kembali',
+            'cancelled' => 'Dibatalkan',
+        ];
+        $newLabel = $statusLabels[$this->newStatus] ?? $this->newStatus;
+
+        return "*Perubahan Status Laporan #{$this->order->id}*\n\n"
+            . "Halo {$notifiable->name},\n\n"
+            . "Status laporan Anda telah berubah menjadi: *{$newLabel}*\n"
+            . "Judul: {$this->order->complaint_title}\n"
+            . "Lihat detail: " . url('/complaints/' . $this->order->id) . "\n\n"
+            . "Terima kasih.";
+    }
+
+    public function toDatabase(object $notifiable): array
+    {
+        $statusLabels = [
+            'waiting_approval' => 'Menunggu Persetujuan',
+            'pending' => 'Pending',
+            'scheduled' => 'Terjadwal',
+            'in_progress' => 'Sedang Dikerjakan',
+            'on_hold' => 'Ditunda',
+            'done' => 'Selesai',
+            'rejected' => 'Ditolak',
+            'reopened' => 'Dibuka Kembali',
+            'cancelled' => 'Dibatalkan',
+        ];
+        $newLabel = $statusLabels[$this->newStatus] ?? $this->newStatus;
+
+        return [
+            'title' => 'Perubahan Status Laporan',
+            'message' => "Status laporan #{$this->order->id} berubah menjadi: {$newLabel}",
+            'order_id' => $this->order->id,
+            'url' => url('/complaints/' . $this->order->id),
+            'icon' => 'fas fa-exchange-alt',
+            'color' => 'blue',
+        ];
     }
 }

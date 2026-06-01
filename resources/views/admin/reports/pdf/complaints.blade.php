@@ -85,9 +85,9 @@
                     </td>
                     <td>{{ $order->technician->name ?? '-' }}</td>
                     <td>
-                        @if ($order->status == 'Done')
+                        @if ($order->status == 'done')
                             <span class="status-done">Selesai</span>
-                        @elseif($order->status == 'Pending')
+                        @elseif($order->status == 'pending')
                             <span class="status-pending">Baru</span>
                         @else
                             {{ $order->status }}

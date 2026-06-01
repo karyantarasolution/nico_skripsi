@@ -34,7 +34,7 @@ class ReportController extends Controller
     public function techniciansPdf()
     {
         $technicians = Technician::withCount(['maintenanceOrders as total_jobs' => function ($query) {
-            $query->where('status', 'Done');
+            $query->where('status', 'done');
         }])->get();
 
         $pdf = Pdf::loadView('admin.reports.pdf.technicians', compact('technicians'));
@@ -64,7 +64,7 @@ class ReportController extends Controller
     {
         // Ambil data yang sudah selesai (Done)
         $orders = MaintenanceOrder::with(['ownership.customer', 'technician'])
-            ->where('status', 'Done')
+            ->where('status', 'done')
             ->orderBy('complaint_date', 'desc')
             ->get();
 

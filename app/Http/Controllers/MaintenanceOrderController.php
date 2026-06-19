@@ -148,7 +148,10 @@ class MaintenanceOrderController extends Controller
         $repairPrices = RepairPrice::all();
         $isWarrantyExpired = Carbon::now()->greaterThan($order->ownership->warranty_end_date);
 
-        return view('admin.maintenance.show', compact('order', 'technicians', 'repairPrices', 'isWarrantyExpired'));
+        // Cari rekomendasi teknisi terbaik buat preview
+        $recommendedTech = $order->technician_id ? null : $this->findBestTechnician($order);
+
+        return view('admin.maintenance.show', compact('order', 'technicians', 'repairPrices', 'isWarrantyExpired', 'recommendedTech'));
     }
 
     // ─── SMART ASSIGN ───

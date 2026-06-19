@@ -2,7 +2,7 @@
 <html>
 
 <head>
-    <title>Laporan Penjualan Unit</title>
+    <title>Laporan Data & Status Unit</title>
     <style>
         body {
             font-family: sans-serif;
@@ -35,7 +35,7 @@
 <body>
     @include('admin.reports.pdf._header')
 
-    <h3 class="text-center">LAPORAN DATA DAN PENJUALAN UNIT RUMAH</h3>
+    <h3 class="text-center">LAPORAN DATA & STATUS UNIT RUMAH</h3>
 
     <table>
         <thead>
@@ -45,7 +45,7 @@
                 <th>Tipe</th>
                 <th>LB/LT</th>
                 <th>Harga (Rp)</th>
-                <th>Status Penjualan</th>
+                <th>Status Unit</th>
                 <th>Nama Pembeli</th>
                 <th>Metode Bayar</th>
             </tr>

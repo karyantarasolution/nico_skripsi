@@ -87,7 +87,7 @@
                 <x-slot name="icon">
                     <i class="fas fa-handshake w-6 h-6 flex items-center justify-center text-lg"></i>
                 </x-slot>
-                {{ __('Data Penjualan') }}
+                {{ __('Data Kepemilikan') }}
             </x-nav-link>
 
             <x-nav-link href="{{ route('admin.maintenance.index') }}" :active="request()->routeIs('admin.maintenance.*')">

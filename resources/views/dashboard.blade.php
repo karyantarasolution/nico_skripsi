@@ -93,7 +93,7 @@
         {{-- Grafik Baris 1 --}}
         <div class="grid gap-6 mb-8 md:grid-cols-2">
             <div class="min-w-0 p-4 bg-white rounded-lg shadow-xs">
-                <h4 class="mb-4 font-semibold text-gray-800">Status Penjualan Unit</h4>
+                <h4 class="mb-4 font-semibold text-gray-800">Status Kepemilikan Unit</h4>
                 <canvas id="pieChart"></canvas>
             </div>
 

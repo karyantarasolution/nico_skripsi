@@ -3,6 +3,36 @@
         {{ __('Pusat Laporan & Cetak') }}
     </x-slot>
 
+    {{-- Filter Perbulan --}}
+    <div class="mb-6 p-4 bg-white rounded-lg shadow-md border border-gray-200">
+        <form method="GET" action="{{ route('admin.reports.index') }}" class="flex flex-wrap items-end gap-4">
+            <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Bulan</label>
+                <select name="month" class="rounded-md border-gray-300 shadow-sm text-sm focus:border-purple-500 focus:ring-purple-500">
+                    <option value="">Semua Bulan</option>
+                    @foreach (['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'] as $i => $nama)
+                        <option value="{{ $i + 1 }}" {{ request('month') == $i + 1 ? 'selected' : '' }}>{{ $nama }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Tahun</label>
+                <select name="year" class="rounded-md border-gray-300 shadow-sm text-sm focus:border-purple-500 focus:ring-purple-500">
+                    <option value="">Semua Tahun</option>
+                    @foreach (range(date('Y'), date('Y') - 5) as $thn)
+                        <option value="{{ $thn }}" {{ request('year') == $thn ? 'selected' : '' }}>{{ $thn }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <button type="submit" class="px-4 py-2 bg-purple-600 text-white text-sm rounded hover:bg-purple-700">
+                <i class="fas fa-filter mr-1"></i> Filter
+            </button>
+            <a href="{{ route('admin.reports.index') }}" class="px-4 py-2 bg-gray-200 text-gray-700 text-sm rounded hover:bg-gray-300">
+                <i class="fas fa-times mr-1"></i> Reset
+            </a>
+        </form>
+    </div>
+
     <div class="grid gap-6 mb-8 md:grid-cols-2 xl:grid-cols-3">
 
         <div class="p-6 bg-white rounded-lg shadow-md border-l-4 border-purple-500">
@@ -15,8 +45,12 @@
                     <p class="text-xs text-gray-500">Daftar semua laporan masuk</p>
                 </div>
             </div>
+            @php
+                $queryParams = request()->only(['month', 'year']);
+                $queryString = http_build_query($queryParams);
+            @endphp
             <div class="mt-4">
-                <a href="{{ route('admin.reports.complaints.pdf') }}" target="_blank"
+                <a href="{{ route('admin.reports.complaints.pdf', $queryParams) }}" target="_blank"
                     class="block w-full bg-red-600 text-white text-center py-2 rounded text-sm hover:bg-red-700">
                     <i class="fas fa-file-pdf mr-1"></i> Cetak PDF
                 </a>
@@ -34,7 +68,7 @@
                 </div>
             </div>
             <div class="mt-4">
-                <a href="{{ route('admin.reports.category.pdf') }}" target="_blank"
+                <a href="{{ route('admin.reports.category.pdf', $queryParams) }}" target="_blank"
                     class="block w-full bg-red-600 text-white text-center py-2 rounded text-sm hover:bg-red-700">
                     <i class="fas fa-file-pdf mr-1"></i> Cetak PDF
                 </a>
@@ -52,7 +86,7 @@
                 </div>
             </div>
             <div class="mt-4">
-                <a href="{{ route('admin.reports.sla.pdf') }}" target="_blank"
+                <a href="{{ route('admin.reports.sla.pdf', $queryParams) }}" target="_blank"
                     class="block w-full bg-red-600 text-white text-center py-2 rounded text-sm hover:bg-red-700">
                     <i class="fas fa-file-pdf mr-1"></i> Cetak PDF
                 </a>
@@ -70,7 +104,7 @@
                 </div>
             </div>
             <div class="mt-4">
-                <a href="{{ route('admin.reports.technicians.pdf') }}" target="_blank"
+                <a href="{{ route('admin.reports.technicians.pdf', $queryParams) }}" target="_blank"
                     class="block w-full bg-red-600 text-white text-center py-2 rounded text-sm hover:bg-red-700">
                     <i class="fas fa-file-pdf mr-1"></i> Cetak PDF
                 </a>
@@ -88,7 +122,7 @@
                 </div>
             </div>
             <div class="mt-4">
-                <a href="{{ route('admin.reports.ratings.pdf') }}" target="_blank"
+                <a href="{{ route('admin.reports.ratings.pdf', $queryParams) }}" target="_blank"
                     class="block w-full bg-red-600 text-white text-center py-2 rounded text-sm hover:bg-red-700">
                     <i class="fas fa-file-pdf mr-1"></i> Cetak PDF
                 </a>
@@ -106,7 +140,7 @@
                 </div>
             </div>
             <div class="mt-4">
-                <a href="{{ route('admin.reports.financial.pdf') }}" target="_blank"
+                <a href="{{ route('admin.reports.financial.pdf', $queryParams) }}" target="_blank"
                     class="block w-full bg-red-600 text-white text-center py-2 rounded text-sm hover:bg-red-700">
                     <i class="fas fa-file-pdf mr-1"></i> Cetak PDF
                 </a>
@@ -124,7 +158,7 @@
                 </div>
             </div>
             <div class="mt-4">
-                <a href="{{ route('admin.reports.warranty.pdf') }}" target="_blank"
+                <a href="{{ route('admin.reports.warranty.pdf', $queryParams) }}" target="_blank"
                     class="block w-full bg-red-600 text-white text-center py-2 rounded text-sm hover:bg-red-700">
                     <i class="fas fa-file-pdf mr-1"></i> Cetak PDF
                 </a>
@@ -142,7 +176,7 @@
                 </div>
             </div>
             <div class="mt-4">
-                <a href="{{ route('admin.reports.units.pdf') }}" target="_blank"
+                <a href="{{ route('admin.reports.units.pdf', $queryParams) }}" target="_blank"
                     class="block w-full bg-red-600 text-white text-center py-2 rounded text-sm hover:bg-red-700">
                     <i class="fas fa-file-pdf mr-1"></i> Cetak PDF
                 </a>

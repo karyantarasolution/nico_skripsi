@@ -136,14 +136,28 @@
                         </select>
                         <form action="{{ route('admin.maintenance.smart-assign', $order->id) }}" method="POST" class="inline">
                             @csrf
-                            <button type="submit" class="px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 whitespace-nowrap"
-                                onclick="return confirm('Assign teknisi terbaik secara otomatis?')">
-                                <i class="fas fa-magic mr-1"></i> Smart Assign
-                            </button>
+                            @if ($recommendedTech && !$order->technician_id)
+                                <button type="submit" class="px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 whitespace-nowrap"
+                                    onclick="return confirm('Assign {{ $recommendedTech->name }} (Spesialis {{ $recommendedTech->specialty }}) secara otomatis?')">
+                                    <i class="fas fa-magic mr-1"></i> Smart Assign
+                                </button>
+                            @elseif ($order->technician_id)
+                                <button type="button" class="px-3 py-2 bg-gray-400 text-white text-sm rounded cursor-not-allowed whitespace-nowrap" disabled>
+                                    <i class="fas fa-magic mr-1"></i> Sudah Assign
+                                </button>
+                            @else
+                                <button type="submit" class="px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 whitespace-nowrap"
+                                    onclick="return confirm('Assign teknisi terbaik secara otomatis?')">
+                                    <i class="fas fa-magic mr-1"></i> Smart Assign
+                                </button>
+                            @endif
                         </form>
                     </div>
+                    @if ($recommendedTech && !$order->technician_id)
+                        <p class="text-xs text-green-600 mt-1">Rekomendasi: <strong>{{ $recommendedTech->name }}</strong> (Spesialis {{ $recommendedTech->specialty }})</p>
+                    @endif
                     @if ($order->technician)
-                        <p class="text-xs text-blue-600 mt-1">Saat ini: {{ $order->technician->name }}</p>
+                        <p class="text-xs text-blue-600 mt-1">Saat ini: <strong>{{ $order->technician->name }}</strong> ({{ $order->technician->specialty }})</p>
                     @endif
                 </div>
 

@@ -1,6 +1,6 @@
 <x-app-layout>
     <x-slot name="header">
-        {{ __('Detail Penjualan & Garansi') }}
+        {{ __('Detail Kepemilikan & Garansi') }}
     </x-slot>
 
     <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-md overflow-hidden">

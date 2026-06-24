@@ -127,31 +127,28 @@
                     <label class="block text-sm font-medium text-gray-700 mb-2">Tugaskan Teknisi</label>
                     <div class="flex gap-2 items-start">
                         <select name="technician_id" class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500">
-                            <option value="">-- Pilih Teknisi Available --</option>
+                            <option value="">-- Pilih Teknisi --</option>
                             @foreach ($technicians as $tech)
                                 <option value="{{ $tech->id }}" {{ $order->technician_id == $tech->id ? 'selected' : '' }}>
                                     {{ $tech->name }} - Spesialis {{ $tech->specialty }} ({{ $tech->status }})
                                 </option>
                             @endforeach
                         </select>
-                        <form action="{{ route('admin.maintenance.smart-assign', $order->id) }}" method="POST" class="inline">
-                            @csrf
-                            @if ($recommendedTech && !$order->technician_id)
-                                <button type="submit" class="px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 whitespace-nowrap"
-                                    onclick="return confirm('Assign {{ $recommendedTech->name }} (Spesialis {{ $recommendedTech->specialty }}) secara otomatis?')">
-                                    <i class="fas fa-magic mr-1"></i> Smart Assign
-                                </button>
-                            @elseif ($order->technician_id)
-                                <button type="button" class="px-3 py-2 bg-gray-400 text-white text-sm rounded cursor-not-allowed whitespace-nowrap" disabled>
-                                    <i class="fas fa-magic mr-1"></i> Sudah Assign
-                                </button>
-                            @else
-                                <button type="submit" class="px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 whitespace-nowrap"
-                                    onclick="return confirm('Assign teknisi terbaik secara otomatis?')">
-                                    <i class="fas fa-magic mr-1"></i> Smart Assign
-                                </button>
-                            @endif
-                        </form>
+                        @if ($recommendedTech && !$order->technician_id)
+                            <button type="submit" form="smart-assign-form-{{ $order->id }}" class="px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 whitespace-nowrap"
+                                onclick="return confirm('Assign {{ $recommendedTech->name }} (Spesialis {{ $recommendedTech->specialty }}) secara otomatis?')">
+                                <i class="fas fa-magic mr-1"></i> Smart Assign
+                            </button>
+                        @elseif ($order->technician_id)
+                            <button type="button" class="px-3 py-2 bg-gray-400 text-white text-sm rounded cursor-not-allowed whitespace-nowrap" disabled>
+                                <i class="fas fa-magic mr-1"></i> Sudah Assign
+                            </button>
+                        @else
+                            <button type="submit" form="smart-assign-form-{{ $order->id }}" class="px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 whitespace-nowrap"
+                                onclick="return confirm('Assign teknisi terbaik secara otomatis?')">
+                                <i class="fas fa-magic mr-1"></i> Smart Assign
+                            </button>
+                        @endif
                     </div>
                     @if ($recommendedTech && !$order->technician_id)
                         <p class="text-xs text-green-600 mt-1">Rekomendasi: <strong>{{ $recommendedTech->name }}</strong> (Spesialis {{ $recommendedTech->specialty }})</p>
@@ -199,7 +196,7 @@
                             <i class="fas fa-check-circle mr-2"></i>
                             <span>Garansi Aktif</span>
                         </div>
-                        <p class="text-sm text-gray-600">Perbaikan ini ditanggung developer (Gratis).</p>
+                        <p class="text-sm text-gray-600">Perbaikan ini Gratis.</p>
                         <input type="hidden" name="cost" value="0">
                     </div>
                 @endif
@@ -330,6 +327,11 @@
             @endif
         </div>
     </div>
+
+    {{-- Hidden form for Smart Assign (separated to avoid nested form) --}}
+    <form id="smart-assign-form-{{ $order->id }}" action="{{ route('admin.maintenance.smart-assign', $order->id) }}" method="POST" style="display:none">
+        @csrf
+    </form>
 
     <script>
         function confirmPayment() {

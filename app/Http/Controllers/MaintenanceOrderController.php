@@ -144,7 +144,7 @@ class MaintenanceOrderController extends Controller
     public function showAdmin($id)
     {
         $order = MaintenanceOrder::with(['ownership.unit', 'ownership.customer', 'technician', 'reporter'])->findOrFail($id);
-        $technicians = Technician::where('status', 'Available')->get();
+        $technicians = Technician::all();
         $repairPrices = RepairPrice::all();
         $isWarrantyExpired = Carbon::now()->greaterThan($order->ownership->warranty_end_date);
 
@@ -179,6 +179,7 @@ class MaintenanceOrderController extends Controller
     {
         $order = MaintenanceOrder::findOrFail($id);
         $oldStatus = $order->status;
+        $oldTechnicianId = $order->technician_id;
 
         $request->validate(['status' => 'required']);
 
@@ -188,18 +189,23 @@ class MaintenanceOrderController extends Controller
         $order->status = $request->status;
         $notified = false;
 
-        if ($request->status == 'in_progress' && $request->technician_id) {
-            $order->technician_id = $request->technician_id;
-            Technician::where('id', $request->technician_id)->update(['status' => 'Busy']);
-            $this->notifyReporter($order, 'assigned');
-            $notified = true;
+        // Handle technician change
+        $newTechId = $request->input('technician_id');
+        if ($newTechId && $newTechId != $oldTechnicianId) {
+            // Free old technician
+            if ($oldTechnicianId) {
+                Technician::where('id', $oldTechnicianId)->update(['status' => 'Available']);
+            }
+            $order->technician_id = $newTechId;
+        } elseif (!$newTechId && $oldTechnicianId && in_array($request->status, ['done', 'rejected', 'cancelled'])) {
+            // Free technician on terminal statuses
+            Technician::where('id', $oldTechnicianId)->update(['status' => 'Available']);
+            $order->technician_id = null;
         }
 
-        if ($request->status == 'scheduled' && $request->technician_id) {
-            $order->technician_id = $request->technician_id;
-            Technician::where('id', $request->technician_id)->update(['status' => 'Busy']);
-            $this->notifyReporter($order, 'assigned');
-            $notified = true;
+        // Mark new technician as Busy when assigned to active jobs
+        if ($order->technician_id && in_array($request->status, ['in_progress', 'scheduled'])) {
+            Technician::where('id', $order->technician_id)->update(['status' => 'Busy']);
         }
 
         if ($request->status == 'done') {
@@ -248,6 +254,11 @@ class MaintenanceOrderController extends Controller
 
         if (!$notified && $oldStatus != $order->status) {
             $this->notifyReporter($order, 'status_changed', $oldStatus, $order->status);
+        }
+
+        // Notify if technician was assigned/changed
+        if ($newTechId && $newTechId != $oldTechnicianId && !$notified) {
+            $this->notifyReporter($order, 'assigned');
         }
 
         return redirect()->route('admin.maintenance.index')

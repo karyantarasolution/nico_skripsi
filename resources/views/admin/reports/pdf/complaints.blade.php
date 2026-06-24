@@ -54,7 +54,16 @@
     <div style="text-align: center; margin-bottom: 20px;">
         <h3 style="margin: 0;">LAPORAN REKAPITULASI KELUHAN WARGA</h3>
         <p style="margin: 5px 0;">
-            Periode: Semua Data s/d {{ \Carbon\Carbon::now()->locale('id')->translatedFormat('d F Y') }}
+            Periode:
+            @if ($month && $year)
+                {{ \Carbon\Carbon::create((int)$year, (int)$month)->locale('id')->translatedFormat('F Y') }}
+            @elseif ($month)
+                {{ \Carbon\Carbon::create(now()->year, (int)$month)->locale('id')->translatedFormat('F') }}
+            @elseif ($year)
+                Tahun {{ $year }}
+            @else
+                Semua Data
+            @endif
         </p>
     </div>
 

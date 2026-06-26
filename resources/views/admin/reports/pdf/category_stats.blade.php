@@ -56,7 +56,16 @@
     <center>
         <h3 style="margin-top: 0;">LAPORAN ANALISIS KATEGORI KERUSAKAN</h3>
         <p style="margin-top: -10px; margin-bottom: 20px;">
-            Periode: Semua Data s/d {{ \Carbon\Carbon::now()->locale('id')->translatedFormat('d F Y') }}
+            Periode:
+            @if ($month && $year)
+                {{ \Carbon\Carbon::create((int)$year, (int)$month)->locale('id')->translatedFormat('F Y') }}
+            @elseif ($month)
+                {{ \Carbon\Carbon::create(now()->year, (int)$month)->locale('id')->translatedFormat('F') }}
+            @elseif ($year)
+                Tahun {{ $year }}
+            @else
+                Semua Data s/d {{ \Carbon\Carbon::now()->locale('id')->translatedFormat('d F Y') }}
+            @endif
         </p>
     </center>
 

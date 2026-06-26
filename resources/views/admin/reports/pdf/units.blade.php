@@ -36,6 +36,18 @@
     @include('admin.reports.pdf._header')
 
     <h3 class="text-center">LAPORAN DATA & STATUS UNIT RUMAH</h3>
+    <p class="text-center">
+        Periode:
+        @if ($month && $year)
+            {{ \Carbon\Carbon::create((int)$year, (int)$month)->locale('id')->translatedFormat('F Y') }}
+        @elseif ($month)
+            {{ \Carbon\Carbon::create(now()->year, (int)$month)->locale('id')->translatedFormat('F') }}
+        @elseif ($year)
+            Tahun {{ $year }}
+        @else
+            Semua Data
+        @endif
+    </p>
 
     <table>
         <thead>

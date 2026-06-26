@@ -45,7 +45,18 @@
     @include('admin.reports.pdf._header')
 
     <h3 class="text-center">LAPORAN PENDAPATAN PERBAIKAN LUAR GARANSI</h3>
-    <p class="text-center">Tanggal Cetak: {{ \Carbon\Carbon::now()->translatedFormat('d F Y') }}</p>
+    <p class="text-center">
+        Periode:
+        @if ($month && $year)
+            {{ \Carbon\Carbon::create((int)$year, (int)$month)->locale('id')->translatedFormat('F Y') }}
+        @elseif ($month)
+            {{ \Carbon\Carbon::create(now()->year, (int)$month)->locale('id')->translatedFormat('F') }}
+        @elseif ($year)
+            Tahun {{ $year }}
+        @else
+            Semua Data
+        @endif
+    </p>
 
     <table>
         <thead>

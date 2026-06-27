@@ -33,7 +33,7 @@ class MaintenanceOrderController extends Controller
     private function notifyReporter(MaintenanceOrder $order, string $type, $oldStatus = null, $newStatus = null): void
     {
         $reporter = $order->reporter;
-        if (!$reporter || !$reporter->email) return;
+        if (!$reporter) return;
 
         try {
             match ($type) {
@@ -518,6 +518,8 @@ class MaintenanceOrderController extends Controller
             'payment_status' => 'Free',
             'cost_status' => 'none',
         ]);
+
+        $this->notifyReporter($order, 'status_changed', 'new', 'pending');
 
         return redirect()->route('complaints.index')
             ->with('success', 'Keluhan berhasil dikirim. Teknisi akan segera memproses keluhan Anda.');

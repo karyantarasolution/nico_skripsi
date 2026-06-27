@@ -45,15 +45,18 @@ class TechnicianAssigned extends Notification
         $tech = $this->order->technician;
         $techName = $tech->name ?? '-';
         $techPhone = $tech->phone ?? '-';
+        $techSpecialty = $tech->specialty ?? '-';
 
-        return "*Teknisi Ditugaskan!*\n\n"
+        return "*Teknisi Ditugaskan*\n\n"
             . "Halo {$notifiable->name},\n\n"
-            . "Seorang teknisi telah ditugaskan untuk laporan Anda:\n"
+            . "Keluhan Anda telah mendapatkan teknisi:\n\n"
             . "Judul: {$this->order->complaint_title}\n"
+            . "Prioritas: {$this->order->priority}\n"
             . "Teknisi: {$techName}\n"
-            . "No. WA: {$techPhone}\n\n"
-            . "Lihat detail: " . url('/complaints/' . $this->order->id) . "\n\n"
-            . "Teknisi akan segera menghubungi Anda.";
+            . "Spesialisasi: {$techSpecialty}\n"
+            . "No. WA Teknisi: {$techPhone}\n\n"
+            . "Link: " . url('/complaints/' . $this->order->id) . "\n\n"
+            . "Teknisi akan segera menghubungi Anda. Mohon bersiap.";
     }
 
     public function toDatabase(object $notifiable): array

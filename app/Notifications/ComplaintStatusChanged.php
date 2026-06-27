@@ -55,7 +55,7 @@ class ComplaintStatusChanged extends Notification
     {
         $statusLabels = [
             'waiting_approval' => 'Menunggu Persetujuan',
-            'pending' => 'Pending',
+            'pending' => 'Telah Terdaftar',
             'scheduled' => 'Terjadwal',
             'in_progress' => 'Sedang Dikerjakan',
             'on_hold' => 'Ditunda',
@@ -66,12 +66,22 @@ class ComplaintStatusChanged extends Notification
         ];
         $newLabel = $statusLabels[$this->newStatus] ?? $this->newStatus;
 
-        return "*Perubahan Status Laporan #{$this->order->id}*\n\n"
-            . "Halo {$notifiable->name},\n\n"
-            . "Status laporan Anda telah berubah menjadi: *{$newLabel}*\n"
-            . "Judul: {$this->order->complaint_title}\n"
-            . "Lihat detail: " . url('/complaints/' . $this->order->id) . "\n\n"
-            . "Terima kasih.";
+        $message = "*Status Laporan #{$this->order->id}*\n\n"
+            . "Halo {$notifiable->name},\n\n";
+
+        if ($this->oldStatus === 'new') {
+            $message .= "Keluhan Anda berhasil dikirim dan sedang menunggu diproses oleh tim kami.\n\n";
+        } else {
+            $oldLabel = $statusLabels[$this->oldStatus] ?? $this->oldStatus;
+            $message .= "Status laporan Anda berubah dari *{$oldLabel}* menjadi *{$newLabel}*.\n\n";
+        }
+
+        $message .= "Judul: {$this->order->complaint_title}\n"
+            . "Deskripsi: {$this->order->complaint_description}\n\n"
+            . "Link: " . url('/complaints/' . $this->order->id) . "\n\n"
+            . "Terima kasih telah menggunakan Resident Help.";
+
+        return $message;
     }
 
     public function toDatabase(object $notifiable): array

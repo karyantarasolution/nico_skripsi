@@ -39,13 +39,17 @@ class CostEstimationApproved extends Notification
 
     public function toWhatsApp(object $notifiable): string
     {
-        return "*Estimasi Biaya Disetujui ✅*\n\n"
+        $cost = $this->order->estimated_cost ? 'Rp ' . number_format($this->order->estimated_cost, 0, ',', '.') : 'Belum ditentukan';
+        $desc = $this->order->estimated_description ?? '-';
+
+        return "*Estimasi Biaya Disetujui*\n\n"
             . "Halo {$notifiable->name},\n\n"
-            . "Estimasi biaya untuk laporan Anda telah disetujui:\n"
+            . "Estimasi biaya perbaikan untuk laporan Anda telah disetujui oleh admin.\n\n"
             . "Judul: {$this->order->complaint_title}\n"
-            . "Biaya: Rp " . number_format($this->order->estimated_cost, 0, ',', '.') . "\n\n"
-            . "Lihat detail: " . url('/complaints/' . $this->order->id) . "\n\n"
-            . "Silakan lakukan pembayaran.";
+            . "Estimasi Biaya: {$cost}\n"
+            . "Keterangan: {$desc}\n\n"
+            . "Link: " . url('/complaints/' . $this->order->id) . "\n\n"
+            . "Silakan lakukan pembayaran setelah perbaikan selesai. Terima kasih.";
     }
 
     public function toDatabase(object $notifiable): array

@@ -38,13 +38,17 @@ class ComplaintCompleted extends Notification
 
     public function toWhatsApp(object $notifiable): string
     {
-        return "*Perbaikan Selesai! ✅*\n\n"
+        $techName = $this->order->technician?->name ?? '-';
+
+        return "*Perbaikan Selesai*\n\n"
             . "Halo {$notifiable->name},\n\n"
-            . "Keluhan Anda telah selesai diperbaiki.\n"
-            . "Judul: {$this->order->complaint_title}\n\n"
-            . "Silakan cek dan beri penilaian:\n"
+            . "Keluhan Anda telah selesai diperbaiki oleh teknisi.\n\n"
+            . "Judul: {$this->order->complaint_title}\n"
+            . "Deskripsi: {$this->order->complaint_description}\n"
+            . "Teknisi: {$techName}\n\n"
+            . "Silakan cek hasil perbaikan dan berikan penilaian Anda:\n"
             . url('/complaints/' . $this->order->id) . "\n\n"
-            . "Terima kasih.";
+            . "Terima kasih telah menggunakan Resident Help.";
     }
 
     public function toDatabase(object $notifiable): array
